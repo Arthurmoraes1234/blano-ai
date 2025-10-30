@@ -1,0 +1,7 @@
+{
+  "name": "Blano AI",
+  "description": "Blano AI is a dashboard for digital marketing agencies to centralize and optimize their workflow using AI for content creation, project management, CRM, and finance.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

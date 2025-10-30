@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="https://i.imgur.com/lUKdBj5.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blano AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
+    :root {
+      --bg-primary: #0A0A0A;
+      --glass-bg: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --btn-grad-from: #00F5A0;
+      --btn-grad-to: #00D9E0;
+      --btn-glow-color: rgba(0, 245, 160, 0.3);
+      --font-family-sans: 'Inter', sans-serif;
+    }
+
+    body {
+      font-family: var(--font-family-sans);
+      background-color: var(--bg-primary);
+      background-image: 
+        radial-gradient(at 20% 20%, hsla(160, 100%, 75%, 0.1) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, hsla(240, 100%, 75%, 0.1) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, hsla(280, 100%, 75%, 0.1) 0px, transparent 50%);
+    }
+
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    
+    .btn-premium {
+      color: white;
+      background-image: linear-gradient(to right, var(--btn-grad-from), var(--btn-grad-to));
+      border: none;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 15px 0 var(--btn-glow-color);
+      transition: all 0.3s ease;
+    }
+    .btn-premium:hover {
+       box-shadow: 0 0 30px 5px var(--btn-glow-color);
+       transform: translateY(-2px);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes fadeInSlideUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn {
+        animation: fadeIn 0.5s ease-in-out forwards;
+    }
+    .animate-fadeInSlideUp {
+        animation: fadeInSlideUp 0.5s ease-in-out forwards;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.1",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.544.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "deno.ns": "https://aistudiocdn.com/deno.ns@^0.8.0",
+    "pdfjs-dist": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs"
+  }
+}
+</script>
+</head>
+<body class="bg-gray-900">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
