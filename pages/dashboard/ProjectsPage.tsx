@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -68,7 +68,134 @@ const initialFormState = {
     documentFile: null as File | null,
 };
 
-type RecordingTarget = 'objective' | 'specificPostRequest';
+type FormStateKey = 'objective' | 'specificPostRequest';
+
+interface AudioInputProps {
+    id: FormStateKey;
+    label: string;
+    subtext: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+    placeholder: string;
+    required?: boolean;
+    rows?: number;
+}
+
+const AudioInput: React.FC<AudioInputProps> = ({ id, label, subtext, value, onChange, placeholder, required = false, rows = 4 }) => {
+    const { addToast } = useToast();
+    const [recording, setRecording] = useState(false);
+    const [transcribing, setTranscribing] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            audioChunksRef.current = [];
+
+            mediaRecorderRef.current.addEventListener("dataavailable", event => {
+                audioChunksRef.current.push(event.data);
+            });
+
+            mediaRecorderRef.current.addEventListener("stop", async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                stream.getTracks().forEach(track => track.stop());
+                
+                setTranscribing(true);
+                try {
+                    const transcribedText = await geminiService.transcribeAudio(audioBlob);
+                    
+                    // Simula um evento de mudança para atualizar o formState com o texto transcrito
+                    const fakeEvent = {
+                        target: {
+                            name: id,
+                            value: (value + ' ' + transcribedText).trim(),
+                        }
+                    } as React.ChangeEvent<HTMLTextAreaElement>;
+                    
+                    onChange(fakeEvent);
+                    addToast('Áudio transcrito com sucesso!', 'success');
+                } catch (error) {
+                    addToast(`Falha na transcrição: ${(error as Error).message}`, 'error');
+                } finally {
+                    setTranscribing(false);
+                }
+            });
+
+            mediaRecorderRef.current.start();
+            setRecording(true);
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            addToast("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.", "error");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+            setRecording(false);
+        }
+    };
+
+    const handleMicClick = () => {
+        if (recording) {
+            stopRecording();
+        } else if (!transcribing) {
+            startRecording();
+        }
+    };
+    
+    // O texto mostrado no campo quando está transcrevendo
+    const displayValue = transcribing 
+        ? (value || '') + '\n\n...Transcrevendo áudio, aguarde...'
+        : value;
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-1">
+                <div>
+                    <label htmlFor={id} className="block text-sm font-medium text-gray-300">
+                        {label}
+                    </label>
+                    <p className="text-xs text-gray-500">{subtext}</p>
+                </div>
+                <div className="relative">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleMicClick}
+                        disabled={transcribing}
+                        className={`p-2 h-auto rounded-full transition-colors ${recording ? 'text-red-500 bg-red-500/10' : 'text-gray-400 hover:text-white'}`}
+                        title={recording ? 'Parar Gravação' : 'Gravar com Áudio'}
+                    >
+                        {transcribing ? (
+                            <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                        ) : recording ? (
+                            <StopCircle size={20} />
+                        ) : (
+                            <Mic size={20} />
+                        )}
+                    </Button>
+                    {recording && <span className="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-gray-800 bg-red-500 animate-ping"></span>}
+                </div>
+            </div>
+            <textarea
+                id={id}
+                name={id}
+                rows={rows}
+                value={displayValue}
+                onChange={onChange}
+                placeholder={placeholder}
+                className="w-full bg-white/5 border border-white/10 text-white rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--btn-grad-to)] focus:border-[var(--btn-grad-to)] transition"
+                required={required}
+                disabled={transcribing}
+            />
+        </div>
+    );
+};
+
 
 const PLANO_PADRAO_ID = 'price_1SDB6OP7wbQf0EBDVlYXGw8d';
 const LIMITE_PROJETOS = 20;
@@ -86,10 +213,11 @@ const ProjectsPage: React.FC = () => {
     const [formState, setFormState] = useState(initialFormState);
     const [isParsingFile, setIsParsingFile] = useState(false);
     
-    const [recordingTarget, setRecordingTarget] = useState<RecordingTarget | null>(null);
-    const [transcribingTarget, setTranscribingTarget] = useState<RecordingTarget | null>(null);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
+    // Removi os estados de gravação/transcrição do ProjectsPage e movi para o AudioInput
+    // const [recordingTarget, setRecordingTarget] = useState<FormStateKey | null>(null);
+    // const [transcribingTarget, setTranscribingTarget] = useState<FormStateKey | null>(null);
+    // const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    // const audioChunksRef = useRef<Blob[]>([]);
 
     const isStandardPlan = user?.subscription?.plan_id === PLANO_PADRAO_ID;
     const projectCount = user?.monthly_project_count || 0;
@@ -102,13 +230,24 @@ const ProjectsPage: React.FC = () => {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
+        // O `name` é 'objective' ou 'specificPostRequest', que são as chaves FormStateKey
+        const key = name as keyof typeof initialFormState; 
+
         if (type === 'checkbox') {
             const checked = (e.target as HTMLInputElement).checked;
-            setFormState(prev => ({ ...prev, [name]: checked }));
+            setFormState(prev => ({ ...prev, [key]: checked }));
         } else {
-            setFormState(prev => ({ ...prev, [name]: value }));
+            // A tipagem do FormStateKey é essencial aqui
+            setFormState(prev => ({ ...prev, [key]: value }));
         }
     };
+    
+    // Tipagem da função de mudança de estado para uso no AudioInput
+    const handleTextAreaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        const key = name as FormStateKey;
+        setFormState(prev => ({ ...prev, [key]: value }));
+    }, []);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
@@ -235,6 +374,7 @@ const ProjectsPage: React.FC = () => {
             addToast(`Projeto "${createdProject.nome}" criado com sucesso!`, 'success');
             setIsModalOpen(false);
             setFormState(initialFormState);
+            navigate(`/projects/${createdProject.id}`); // Redireciona para o projeto recém-criado
         } catch (error) {
             console.error("Failed to generate briefing:", error);
             addToast(`Falha ao gerar briefing: ${(error as Error).message}`, "error");
@@ -246,8 +386,10 @@ const ProjectsPage: React.FC = () => {
     const filteredProjects = useMemo(() => {
         const baseProjects = projects.filter(p => {
             if (viewMode === 'active') {
-                return p.status !== ProjectStatus.Posted;
+                // Projetos ativos são todos, exceto os 'Posted' (arquivados)
+                return p.status !== ProjectStatus.Posted; 
             }
+            // Projetos arquivados são apenas os 'Posted'
             return p.status === ProjectStatus.Posted;
         });
 
@@ -258,58 +400,6 @@ const ProjectsPage: React.FC = () => {
             p.cliente.toLowerCase().includes(lowercasedQuery)
         );
     }, [projects, searchQuery, viewMode]);
-    
-    const startRecording = async (target: RecordingTarget) => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            audioChunksRef.current = [];
-
-            mediaRecorderRef.current.addEventListener("dataavailable", event => {
-                audioChunksRef.current.push(event.data);
-            });
-
-            mediaRecorderRef.current.addEventListener("stop", async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                stream.getTracks().forEach(track => track.stop());
-                
-                setTranscribingTarget(target);
-                try {
-                    const transcribedText = await geminiService.transcribeAudio(audioBlob);
-                    setFormState(prev => ({
-                        ...prev,
-                        [target]: (prev[target] + ' ' + transcribedText).trim(),
-                    }));
-                    addToast('Áudio transcrito com sucesso!', 'success');
-                } catch (error) {
-                    addToast((error as Error).message, 'error');
-                } finally {
-                    setTranscribingTarget(null);
-                }
-            });
-
-            mediaRecorderRef.current.start();
-            setRecordingTarget(target);
-        } catch (err) {
-            console.error("Error accessing microphone:", err);
-            addToast("Não foi possível acessar o microfone. Verifique as permissões do seu navegador.", "error");
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-            setRecordingTarget(null);
-        }
-    };
-
-    const handleMicClick = (target: RecordingTarget) => {
-        if (recordingTarget === target) {
-            stopRecording();
-        } else if (!recordingTarget) {
-            startRecording(target);
-        }
-    };
 
     return (
         <div className="flex flex-col h-full">
@@ -329,11 +419,11 @@ const ProjectsPage: React.FC = () => {
                         <div className="relative flex-grow sm:flex-grow-0">
                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                            <input
-                             type="text"
-                             placeholder="Buscar por nome ou cliente..."
-                             value={searchQuery}
-                             onChange={(e) => setSearchQuery(e.target.value)}
-                             className="w-full bg-white/5 border border-white/10 text-white rounded-md pl-10 pr-3 py-2 focus:ring-2 focus:ring-[var(--btn-grad-to)]"
+                            type="text"
+                            placeholder="Buscar por nome ou cliente..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 text-white rounded-md pl-10 pr-3 py-2 focus:ring-2 focus:ring-[var(--btn-grad-to)]"
                            />
                         </div>
                         <Button onClick={() => setIsModalOpen(true)}>
@@ -377,52 +467,24 @@ const ProjectsPage: React.FC = () => {
                     </div>
                     <Input name="segment" label="Segmento do Cliente" value={formState.segment} onChange={handleInputChange} placeholder="Ex: Moda sustentável, Comida vegana" required />
                     
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <div>
-                                <label htmlFor="objective" className="block text-sm font-medium text-gray-300">
-                                    Briefing Detalhado do Projeto
-                                </label>
-                                <p className="text-xs text-gray-500">Use sua voz para detalhar o briefing.</p>
-                            </div>
-                            <div className="relative">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleMicClick('objective')}
-                                    disabled={!!transcribingTarget || (!!recordingTarget && recordingTarget !== 'objective')}
-                                    className={`p-2 h-auto rounded-full transition-colors ${recordingTarget === 'objective' ? 'text-red-500 bg-red-500/10' : 'text-gray-400 hover:text-white'}`}
-                                    title={recordingTarget === 'objective' ? 'Parar Gravação' : 'Gravar Briefing com Áudio'}
-                                >
-                                    {transcribingTarget === 'objective' ? (
-                                        <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                                    ) : recordingTarget === 'objective' ? (
-                                        <StopCircle size={20} />
-                                    ) : (
-                                        <Mic size={20} />
-                                    )}
-                                </Button>
-                                {recordingTarget === 'objective' && <span className="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-gray-800 bg-red-500 animate-ping"></span>}
-                            </div>
-                        </div>
-                        <textarea
-                            id="objective"
-                            name="objective"
-                            rows={4}
-                            value={formState.objective}
-                            onChange={handleInputChange}
-                            placeholder="Ex: Clínica de estética focada em rejuvenescimento. Falar sobre os benefícios do tratamento X, mostrar antes e depois (conceitual), e criar uma promoção para novos clientes."
-                            className="w-full bg-white/5 border border-white/10 text-white rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--btn-grad-to)] focus:border-[var(--btn-grad-to)] transition"
-                            required
-                        />
-                    </div>
+                    {/* Componente AudioInput Refatorado */}
+                    <AudioInput
+                        id="objective"
+                        label="Briefing Detalhado do Projeto"
+                        subtext="Use sua voz para detalhar o briefing."
+                        value={formState.objective}
+                        onChange={handleTextAreaChange}
+                        placeholder="Ex: Clínica de estética focada em rejuvenescimento. Falar sobre os benefícios do tratamento X, mostrar antes e depois (conceitual), e criar uma promoção para novos clientes."
+                        required
+                        rows={4}
+                    />
+                    {/* Fim do Componente AudioInput */}
                     
-                     <div className="mt-4">
+                    <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-300 mb-1">
                             Contexto Adicional (Opcional)
                         </label>
-                        <p className="text-xs text-gray-500 mb-2">Anexe um documento (.pdf, .txt) ou imagem (.png, .jpg) com informações sobre o cliente. Você pode enviar prints do Instagram para a IA ter uma base do que já vem sido criado.</p>
+                        <p className="text-xs text-gray-500 mb-2">Anexe um documento (.pdf, .txt) ou imagem (.png, .jpg) com informações sobre o cliente. Você pode enviar prints do Instagram para a IA ter uma base do que já vem sendo criado.</p>
                         {formState.documentFile ? (
                             <div className="flex items-center justify-between bg-white/10 p-3 rounded-md">
                                 <div className="flex items-center gap-3 overflow-hidden">
@@ -462,45 +524,17 @@ const ProjectsPage: React.FC = () => {
                         )}
                     </div>
                     
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                           <div>
-                                <label htmlFor="specificPostRequest" className="block text-sm font-medium text-gray-300">
-                                    Deseja algum post personalizado? (Opcional)
-                                </label>
-                                <p className="text-xs text-gray-500">Descreva por áudio os posts que deseja.</p>
-                            </div>
-                           <div className="relative">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleMicClick('specificPostRequest')}
-                                    disabled={!!transcribingTarget || (!!recordingTarget && recordingTarget !== 'specificPostRequest')}
-                                    className={`p-2 h-auto rounded-full transition-colors ${recordingTarget === 'specificPostRequest' ? 'text-red-500 bg-red-500/10' : 'text-gray-400 hover:text-white'}`}
-                                    title={recordingTarget === 'specificPostRequest' ? 'Parar Gravação' : 'Gravar Pedido com Áudio'}
-                                >
-                                    {transcribingTarget === 'specificPostRequest' ? (
-                                        <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                                    ) : recordingTarget === 'specificPostRequest' ? (
-                                        <StopCircle size={20} />
-                                    ) : (
-                                        <Mic size={20} />
-                                    )}
-                                </Button>
-                                {recordingTarget === 'specificPostRequest' && <span className="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-gray-800 bg-red-500 animate-ping"></span>}
-                            </div>
-                        </div>
-                        <textarea
-                            id="specificPostRequest"
-                            name="specificPostRequest"
-                            rows={3}
-                            value={formState.specificPostRequest}
-                            onChange={handleInputChange}
-                            placeholder="Ex: Preciso de 2 posts personalizados, um para o Dia das Mães e outro sobre nossa promoção de inverno."
-                            className="w-full bg-white/5 border border-white/10 text-white rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--btn-grad-to)] focus:border-[var(--btn-grad-to)] transition"
-                        />
-                    </div>
+                    {/* Componente AudioInput Refatorado */}
+                    <AudioInput
+                        id="specificPostRequest"
+                        label="Deseja algum post personalizado? (Opcional)"
+                        subtext="Descreva por áudio os posts que deseja."
+                        value={formState.specificPostRequest}
+                        onChange={handleTextAreaChange}
+                        placeholder="Ex: Preciso de 2 posts personalizados, um para o Dia das Mães e outro sobre nossa promoção de inverno."
+                        rows={3}
+                    />
+                    {/* Fim do Componente AudioInput */}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
