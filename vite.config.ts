@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
         },
         plugins: [react()],
         define: {
+            // Garante que as variáveis de ambiente com o prefixo 'GEMINI' e 'API_KEY' sejam expostas
             'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
             'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
         },
@@ -20,11 +21,14 @@ export default defineConfig(({ mode }) => {
             }
         },
         
-        // --- INÍCIO DA CORREÇÃO CRÍTICA DO BUILD ---
+        // --- CORREÇÃO CRÍTICA DO BUILD ---
         // Adiciona a configuração para resolver o erro 'pdfjs-dist' no Rollup
         build: {
             rollupOptions: {
                 external: [
+                    // O Rollup precisa saber que a importação principal 'pdfjs-dist' é externa.
+                    // Isso ignora a dependência durante o build do Vercel/SSR.
+                    'pdfjs-dist', 
                     'pdfjs-dist/build/pdf.worker.js'
                 ]
             }
