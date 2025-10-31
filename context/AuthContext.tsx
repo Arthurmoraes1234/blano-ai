@@ -8,15 +8,20 @@ import React, {
   useCallback 
 } from 'react';
 
-// Certifique-se de que os paths 'authService', 'firestoreService' e 'supabaseClient'
-// estão corretos no seu projeto.
+// Certifique-se de que os paths estão corretos no seu projeto.
 import { authService } from '../services/authService';
 import { supabaseService } from '../services/firestoreService';
 import { User } from '../types';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient'; // Variável 'supabase'
 
-// --- Definição de Tipos ---
+// ** MUDANÇA CRÍTICA: Importando o Supabase com import * as **
+// Isso ajuda a contornar erros de resolvedor de módulos (SyntaxError) no ambiente Vite.
+import * as SupabaseJs from '@supabase/supabase-js';
+import { supabase } from '../services/supabaseClient';
+
+// Definindo o tipo Session a partir do import *
+type Session = SupabaseJs.Session; 
+
+// --- Definição de Tipos (Replicando sua Interface) ---
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -47,7 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const setIsSigningUp = useCallback((status: boolean) => {
     isSigningUpRef.current = status;
-  }, []);
+  }, []); 
 
   // --- Função Central de Carregamento de Perfil ---
   const fetchUserProfile = useCallback(async (session: Session | null) => {
@@ -57,6 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const userProfile = await supabaseService.getUserProfile(session.user.id); 
         
         if (userProfile) {
+          // Garante que apenas o perfil limpo (User) vá para o estado
           setUser(userProfile);
           setAgencyId(userProfile.id_agencia);
         } else {
@@ -80,76 +86,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAgencyId(null);
     }
     setLoading(false);
-  }, []);
+  }, []); 
 
   useEffect(() => {
-    // Definimos loading como true para o ciclo inicial
     setLoading(true); 
 
-    let userSubscriptionListener: ReturnType<typeof supabase.channel> | null = null;
-    let authListener: () => void = () => {};
-
-    // --- Inscrição no Listener de Autenticação (Sempre necessário) ---
-    if (authService) {
-      authListener = authService.onAuthStateChanged((event, session) => {
-        if (event === "PASSWORD_RECOVERY") {
-          console.log("Evento de recuperação de senha detectado. Entrando em modo de recuperação.");
-          setIsRecoveringPassword(true);
-          setLoading(false); 
-          return; 
-        }
-
-        if (recoveryRef.current) {
-          return;
-        }
-        
-        fetchUserProfile(session);
-      });
-    } else {
-        console.error("AuthService não está disponível.");
-        setLoading(false);
-    }
-
-    // --- A CORREÇÃO CRÍTICA ESTÁ AQUI: Verifica se 'supabase' existe antes de usá-lo ---
-    // Isso resolve o "Cannot read properties of undefined (reading 'auth')"
-    if (supabase) {
-        // Listener de Mudanças no Banco de Dados (Postgres Changes)
-        userSubscriptionListener = supabase
-          .channel('public:subscriptions')
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'subscriptions' },
-            async () => {
-              // Aqui também verificamos se a sessão está pronta antes de buscar
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session?.user) {
-                  console.log('Mudança na assinatura detectada, buscando perfil novamente...');
-                  fetchUserProfile(session); 
-              }
-            }
-          )
-          .subscribe();
-    } else {
-        console.error("Supabase client não está disponível para subscriptions.");
-    }
-
-
-    // --- Função de Cleanup ---
-    return () => {
-      // Unsubscribe do listener de Auth
-      authListener(); 
-      
-      // Unsubscribe seguro do canal, caso ele tenha sido criado
-      if (userSubscriptionListener && supabase) {
-        supabase.removeChannel(userSubscriptionListener);
+    const authListener = authService.onAuthStateChanged((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        console.log("Evento de recuperação de senha detectado. Entrando em modo de recuperação.");
+        setIsRecoveringPassword(true);
+        setLoading(false); 
+        return; 
       }
-    };
-  }, [fetchUserProfile]); // fetchUserProfile é a única dependência
 
-  // Resto das funções e retorno...
+      if (recoveryRef.current) {
+        return;
+      }
+      
+      fetchUserProfile(session);
+    });
+
+    // Listener de Mudanças no Banco de Dados (Postgres Changes)
+    const userSubscriptionListener = supabase
+      .channel('public:subscriptions')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'subscriptions' },
+        async () => {
+          // Chamada direta ao Supabase
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+              console.log('Mudança na assinatura detectada, buscando perfil novamente...');
+              fetchUserProfile(session); 
+          }
+        }
+      )
+      .subscribe();
+
+
+    return () => {
+      authListener(); 
+      supabase.removeChannel(userSubscriptionListener);
+    };
+  }, [fetchUserProfile]); 
+  
   const refreshUser = async (): Promise<boolean> => {
-    if (!supabase) return false;
-    
+    // Chamada direta ao Supabase
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
         try {
@@ -189,6 +171,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
+// --- Formato de exportação robusto (V2) para resolver o SyntaxError ---
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
