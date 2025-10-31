@@ -14,7 +14,7 @@ import { authService } from '../services/authService';
 import { supabaseService } from '../services/firestoreService';
 import { User } from '../types';
 import { Session } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient'; // Variável 'supabase'
 
 // --- Definição de Tipos ---
 interface AuthContextType {
@@ -47,20 +47,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const setIsSigningUp = useCallback((status: boolean) => {
     isSigningUpRef.current = status;
-  }, []); // Mantido como useCallback
+  }, []);
 
   // --- Função Central de Carregamento de Perfil ---
   const fetchUserProfile = useCallback(async (session: Session | null) => {
     setProfileError(false);
     if (session?.user) {
       try {
-        // Se o seu 'supabaseService.getUserProfile' retorna o tipo 'User' que inclui 'id_agencia'
         const userProfile = await supabaseService.getUserProfile(session.user.id); 
         
         if (userProfile) {
-          // Aqui garantimos que o objeto 'userProfile' que vai para o estado
-          // é o perfil limpo do banco de dados, assumindo que já está
-          // livre de referências circulares.
           setUser(userProfile);
           setAgencyId(userProfile.id_agencia);
         } else {
@@ -84,54 +80,76 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAgencyId(null);
     }
     setLoading(false);
-  }, []); // Dependência vazia, pois ele usa ref e funções externas
+  }, []);
 
   useEffect(() => {
-    // Definimos loading como true fora do listener para garantir que o estado inicial é de carregamento
+    // Definimos loading como true para o ciclo inicial
     setLoading(true); 
 
-    const authListener = authService.onAuthStateChanged((event, session) => {
-      // Priorize o evento PASSWORD_RECOVERY
-      if (event === "PASSWORD_RECOVERY") {
-        console.log("Evento de recuperação de senha detectado. Entrando em modo de recuperação.");
-        setIsRecoveringPassword(true);
-        setLoading(false); 
-        return; 
-      }
+    let userSubscriptionListener: ReturnType<typeof supabase.channel> | null = null;
+    let authListener: () => void = () => {};
 
-      // Se estivermos em modo de recuperação, ignore outros eventos para evitar conflitos.
-      if (recoveryRef.current) {
-        return;
-      }
-      
-      fetchUserProfile(session);
-    });
-
-    // Listener de Mudanças no Banco de Dados (Postgres Changes)
-    const userSubscriptionListener = supabase
-      .channel('public:subscriptions')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'subscriptions' },
-        async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-              console.log('Mudança na assinatura detectada, buscando perfil novamente...');
-              fetchUserProfile(session); 
-          }
+    // --- Inscrição no Listener de Autenticação (Sempre necessário) ---
+    if (authService) {
+      authListener = authService.onAuthStateChanged((event, session) => {
+        if (event === "PASSWORD_RECOVERY") {
+          console.log("Evento de recuperação de senha detectado. Entrando em modo de recuperação.");
+          setIsRecoveringPassword(true);
+          setLoading(false); 
+          return; 
         }
-      )
-      .subscribe();
+
+        if (recoveryRef.current) {
+          return;
+        }
+        
+        fetchUserProfile(session);
+      });
+    } else {
+        console.error("AuthService não está disponível.");
+        setLoading(false);
+    }
+
+    // --- A CORREÇÃO CRÍTICA ESTÁ AQUI: Verifica se 'supabase' existe antes de usá-lo ---
+    // Isso resolve o "Cannot read properties of undefined (reading 'auth')"
+    if (supabase) {
+        // Listener de Mudanças no Banco de Dados (Postgres Changes)
+        userSubscriptionListener = supabase
+          .channel('public:subscriptions')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'subscriptions' },
+            async () => {
+              // Aqui também verificamos se a sessão está pronta antes de buscar
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.user) {
+                  console.log('Mudança na assinatura detectada, buscando perfil novamente...');
+                  fetchUserProfile(session); 
+              }
+            }
+          )
+          .subscribe();
+    } else {
+        console.error("Supabase client não está disponível para subscriptions.");
+    }
 
 
+    // --- Função de Cleanup ---
     return () => {
-      // O Supabase retorna uma função de unsubscribe, deve ser chamada diretamente
+      // Unsubscribe do listener de Auth
       authListener(); 
-      supabase.removeChannel(userSubscriptionListener);
+      
+      // Unsubscribe seguro do canal, caso ele tenha sido criado
+      if (userSubscriptionListener && supabase) {
+        supabase.removeChannel(userSubscriptionListener);
+      }
     };
-  }, [fetchUserProfile]); // Adicione fetchUserProfile como dependência (é um useCallback)
-  
+  }, [fetchUserProfile]); // fetchUserProfile é a única dependência
+
+  // Resto das funções e retorno...
   const refreshUser = async (): Promise<boolean> => {
+    if (!supabase) return false;
+    
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
         try {
@@ -171,8 +189,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-// --- A CORREÇÃO ESTÁ AQUI: Usando "function" em vez de "const = () =>" ---
-// Isso resolve o erro 'Unexpected token export'.
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -180,4 +196,3 @@ export function useAuth() {
   }
   return context;
 }
-
