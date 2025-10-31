@@ -1,4 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  ReactNode, 
+  useRef, 
+  useCallback 
+} from 'react';
+
 // Certifique-se de que os paths 'authService', 'firestoreService' e 'supabaseClient'
 // estão corretos no seu projeto.
 import { authService } from '../services/authService';
@@ -7,6 +16,7 @@ import { User } from '../types';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 
+// --- Definição de Tipos ---
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -20,32 +30,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// --- Função de Saneamento CRÍTICA ---
-// Garante que apenas dados simples sejam passados para os hooks de estado do React.
-// Isso previne erros de 'estrutura circular para JSON'.
-const sanitizeSessionUser = (sessionUser: Session['user']): User | null => {
-    if (!sessionUser) return null;
-    
-    // O objeto de usuário do Supabase (session.user) é um pouco complexo.
-    // Retornamos apenas o que o seu tipo 'User' no front-end espera.
-    // Se o seu tipo 'User' for o perfil do Firestore, o 'fetchUserProfile' já o trata.
-    // Vamos apenas garantir que não haja referências circulares acidentais.
-    // Neste contexto, apenas retornamos dados básicos da sessão.
-    
-    // NOTA: Se o 'User' no seu 'types.ts' for o *perfil do banco de dados*
-    // com campos como 'id_agencia', esta função não deve retornar o tipo 'User'.
-    // Apenas manterei o tipo para consistência, mas é melhor carregar o perfil do DB.
-    
-    return {
-        id: sessionUser.id,
-        email: sessionUser.email,
-        // Adicione outros campos base da sessão do Supabase, se necessário.
-        // Já que o 'fetchUserProfile' busca o perfil real, isso não é estritamente necessário aqui.
-        // O foco principal é evitar serialização de objetos grandes e circulares.
-    } as User; 
-};
-
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,20 +39,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
-  // Use a ref to prevent stale closures in the listener
+  // Use uma ref para prevenir closures obsoletas no listener
   const recoveryRef = useRef(isRecoveringPassword);
   useEffect(() => {
     recoveryRef.current = isRecoveringPassword;
   }, [isRecoveringPassword]);
 
-
-  const setIsSigningUp = (status: boolean) => {
+  const setIsSigningUp = useCallback((status: boolean) => {
     isSigningUpRef.current = status;
-  };
-
+  }, []); // Mantido como useCallback
 
   // --- Função Central de Carregamento de Perfil ---
-  const fetchUserProfile = async (session: Session | null) => {
+  const fetchUserProfile = useCallback(async (session: Session | null) => {
     setProfileError(false);
     if (session?.user) {
       try {
@@ -102,28 +84,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAgencyId(null);
     }
     setLoading(false);
-  };
-  // ---------------------------------------------
-
+  }, []); // Dependência vazia, pois ele usa ref e funções externas
 
   useEffect(() => {
-    setLoading(true); // Garante que o estado de loading é ativado no início
+    // Definimos loading como true fora do listener para garantir que o estado inicial é de carregamento
+    setLoading(true); 
 
     const authListener = authService.onAuthStateChanged((event, session) => {
-      // Prioritize PASSWORD_RECOVERY event to enter recovery mode.
+      // Priorize o evento PASSWORD_RECOVERY
       if (event === "PASSWORD_RECOVERY") {
-        console.log("Password recovery event detected. Setting recovery mode.");
+        console.log("Evento de recuperação de senha detectado. Entrando em modo de recuperação.");
         setIsRecoveringPassword(true);
-        setLoading(false); // Ensure app is not stuck loading
-        return; // Halt further execution for this event
+        setLoading(false); 
+        return; 
       }
 
-      // If we are in recovery mode, ignore all other auth events to prevent conflicts.
+      // Se estivermos em modo de recuperação, ignore outros eventos para evitar conflitos.
       if (recoveryRef.current) {
         return;
       }
       
-      // O 'fetchUserProfile' será chamado com a sessão atual
       fetchUserProfile(session);
     });
 
@@ -137,7 +117,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
               console.log('Mudança na assinatura detectada, buscando perfil novamente...');
-              // Garante que o perfil é recarregado após mudanças importantes no DB
               fetchUserProfile(session); 
           }
         }
@@ -146,10 +125,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
     return () => {
-      authListener();
+      // O Supabase retorna uma função de unsubscribe, deve ser chamada diretamente
+      authListener(); 
       supabase.removeChannel(userSubscriptionListener);
     };
-  }, []);
+  }, [fetchUserProfile]); // Adicione fetchUserProfile como dependência (é um useCallback)
   
   const refreshUser = async (): Promise<boolean> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -173,7 +153,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsRecoveringPassword(false);
   };
 
-  const value = { user, loading, agencyId, profileError, refreshUser, setIsSigningUp, isRecoveringPassword, exitRecoveryMode };
+  const value = { 
+    user, 
+    loading, 
+    agencyId, 
+    profileError, 
+    refreshUser, 
+    setIsSigningUp, 
+    isRecoveringPassword, 
+    exitRecoveryMode 
+  };
 
   return (
     <AuthContext.Provider value={value}>
@@ -182,10 +171,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-export const useAuth = () => {
+// --- A CORREÇÃO ESTÁ AQUI: Usando "function" em vez de "const = () =>" ---
+// Isso resolve o erro 'Unexpected token export'.
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}
+
