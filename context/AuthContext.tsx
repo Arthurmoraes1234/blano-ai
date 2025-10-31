@@ -1,10 +1,10 @@
-// --- CORREÇÃO CRÍTICA PARA O ERRO 'process is not defined' ---
-// O Supabase (ou suas dependências) espera que a variável global 'process' exista (ambiente Node.js).
-// Esta linha simula o objeto 'process' para o ambiente de navegador (Vite), prevenindo o crash de 1s.
+// --- MOCK CRÍTICO PARA AMBIENTE VITE/BROWSER: RESOLVE 'process is not defined' ---
+// Esta verificação garante que a variável global 'process' exista no navegador,
+// necessária por algumas dependências do Supabase.
 if (typeof window !== 'undefined' && typeof (window as any).process === 'undefined') {
   (window as any).process = { env: { NODE_ENV: 'production' } };
 }
-// -------------------------------------------------------------
+// ---------------------------------------------------------------------------------
 
 import React, { 
   createContext, 
@@ -16,20 +16,14 @@ import React, {
   useCallback 
 } from 'react';
 
-// Certifique-se de que os paths estão corretos no seu projeto.
 import { authService } from '../services/authService';
 import { supabaseService } from '../services/firestoreService';
 import { User } from '../types';
-
-// ** MUDANÇA CRÍTICA: Importando o Supabase com import * as **
-// Isso ajuda a contornar erros de resolvedor de módulos (SyntaxError) no ambiente Vite.
-import * as SupabaseJs from '@supabase/supabase-js';
+// Importação direta do tipo Session (FINALMENTE CORRETA: resolve o erro "is not a constructor")
+import { Session } from '@supabase/supabase-js'; 
 import { supabase } from '../services/supabaseClient';
 
-// Definindo o tipo Session a partir do import *
-type Session = SupabaseJs.Session; 
-
-// --- Definição de Tipos (Replicando sua Interface) ---
+// --- Definição de Tipos ---
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -70,7 +64,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const userProfile = await supabaseService.getUserProfile(session.user.id); 
         
         if (userProfile) {
-          // Garante que apenas o perfil limpo (User) vá para o estado
           setUser(userProfile);
           setAgencyId(userProfile.id_agencia);
         } else {
@@ -121,7 +114,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         'postgres_changes',
         { event: '*', schema: 'public', table: 'subscriptions' },
         async () => {
-          // Chamada direta ao Supabase
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
               console.log('Mudança na assinatura detectada, buscando perfil novamente...');
@@ -139,7 +131,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [fetchUserProfile]); 
   
   const refreshUser = async (): Promise<boolean> => {
-    // Chamada direta ao Supabase
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
         try {
@@ -179,7 +170,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-// --- Formato de exportação robusto (V2) para resolver o SyntaxError ---
+// --- Formato de exportação robusto (V2) ---
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -187,4 +178,3 @@ export function useAuth() {
   }
   return context;
 }
-
