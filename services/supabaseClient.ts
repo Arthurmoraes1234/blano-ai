@@ -20,3 +20,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Cliente dedicado para chamadas anônimas que devem usar as políticas RLS públicas.
 export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
+
