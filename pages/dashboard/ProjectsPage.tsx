@@ -13,10 +13,14 @@ import { geminiService } from '../../services/geminiService';
 import { useToast } from '../../context/ToastContext';
 import { PlusCircle, Search, Clock, CheckCircle, AlertTriangle, Layers, Frown, Upload, X, FileText, Mic, StopCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import * as pdfjsLib from 'pdfjs-dist';
+
+// @ts-ignore - pdf.js é carregado via CDN através do import map
+const pdfjsLib = window['pdfjs-dist'];
 
 // Configura o caminho do worker para o pdf.js para processamento em segundo plano.
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+if (pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+}
 
 const statusConfig = {
     [ProjectStatus.Briefing]: { label: 'Briefing', color: 'bg-blue-500/20 text-blue-400', icon: <Layers size={12} /> },
