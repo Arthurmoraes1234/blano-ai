@@ -1,3 +1,11 @@
+// --- CORREÇÃO CRÍTICA PARA O ERRO 'process is not defined' ---
+// O Supabase (ou suas dependências) espera que a variável global 'process' exista (ambiente Node.js).
+// Esta linha simula o objeto 'process' para o ambiente de navegador (Vite), prevenindo o crash de 1s.
+if (typeof window !== 'undefined' && typeof (window as any).process === 'undefined') {
+  (window as any).process = { env: { NODE_ENV: 'production' } };
+}
+// -------------------------------------------------------------
+
 import React, { 
   createContext, 
   useContext, 
@@ -179,3 +187,4 @@ export function useAuth() {
   }
   return context;
 }
+
