@@ -1,3 +1,11 @@
+// --- MOCK CRÍTICO PARA AMBIENTE VITE/BROWSER: RESOLVE 'process is not defined' ---
+// O Supabase tenta acessar 'process' globalmente. Esta linha garante que o objeto
+// exista no navegador (Vite) para evitar o erro de inicialização de 1 segundo.
+if (typeof window !== 'undefined' && typeof (window as any).process === 'undefined') {
+  (window as any).process = { env: { NODE_ENV: 'production' } };
+}
+// ---------------------------------------------------------------------------------
+
 import { createClient } from '@supabase/supabase-js';
 import { User } from '../types';
 
@@ -11,3 +19,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Cliente dedicado para chamadas anônimas que devem usar as políticas RLS públicas.
 export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+
