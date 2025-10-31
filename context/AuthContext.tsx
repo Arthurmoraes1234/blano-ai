@@ -20,7 +20,8 @@ import { authService } from '../services/authService';
 import { supabaseService } from '../services/firestoreService';
 import { User } from '../types';
 
-// CORREÇÃO: Importando apenas o tipo Session. Isso resolve o erro "is not a constructor"
+// CORREÇÃO ESSENCIAL: Importando SÓ o tipo Session do @supabase/supabase-js. 
+// Isso resolve o erro "SupabaseJs.Session is not a constructor".
 import { Session } from '@supabase/supabase-js'; 
 import { supabase } from '../services/supabaseClient';
 
@@ -62,7 +63,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setProfileError(false);
     if (session?.user) {
       try {
-        // Assume que 'supabaseService' está correto
         const userProfile = await supabaseService.getUserProfile(session.user.id); 
         
         if (userProfile) {
@@ -109,8 +109,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       fetchUserProfile(session);
     });
 
-    // Listener de Mudanças no Banco de Dados (Postgres Changes)
-    // O 'supabase' aqui deve vir do arquivo supabaseClient.ts
     const userSubscriptionListener = supabase
       .channel('public:subscriptions')
       .on(
@@ -146,6 +144,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         } catch (error) {
           console.error("Erro ao atualizar o perfil do usuário manualmente:", error);
+          // Permite que o código continue a execução mesmo após um erro, 
+          // mas retorna false.
         }
     }
     return false;
@@ -181,4 +181,3 @@ export function useAuth() {
   }
   return context;
 }
-
