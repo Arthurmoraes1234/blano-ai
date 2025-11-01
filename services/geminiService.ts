@@ -222,6 +222,38 @@ const generateProjectBriefing = async (input: ProjectBriefingInput): Promise<Pro
   }
 };
 
+// 🔧 FUNÇÃO CORRIGIDA: Agora existe!
+const generateProjectContent = async (projectData: Partial<Project>): Promise<Partial<Project>> => {
+    try {
+        // Transforma os dados do projeto para o formato que o Gemini espera
+        const briefingInput: ProjectBriefingInput = {
+            client: projectData.cliente || '',
+            segment: projectData.segment || '',
+            objective: projectData.objetivo || '',
+            channels: projectData.canais || ['Instagram', 'Facebook'],
+            contentCount: projectData.quantidade_conteudo || 3,
+            specificPostRequest: projectData.tipo_conteudo || '',
+            contentLength: projectData.tamanho_conteudo as 'compacto' | 'médio' | 'longo' || 'médio',
+            carouselCount: projectData.quantidade_carrossel || 0,
+            carouselSlideCount: projectData.quantidade_slides_carrossel || 3,
+            documentContext: projectData.contexto_documento || '',
+        };
+
+        // Chama o Gemini para gerar o briefing
+        const briefing = await generateProjectBriefing(briefingInput);
+
+        // Retorna o projeto com o briefing gerado
+        return {
+            ...projectData,
+            briefing: briefing,
+            status: 'briefing' as any, // Define o status como briefing
+        };
+    } catch (error) {
+        console.error('Error generating project content:', error);
+        throw new Error('Não foi possível gerar o conteúdo do projeto. Tente novamente.');
+    }
+};
+
 const optimizeContent = async (input: OptimizeContentInput): Promise<{ result: string | string[] }> => {
     if (!ai) {
         console.warn("Gemini AI client not initialized or API key missing. Falling back to mock data.");
@@ -343,10 +375,16 @@ const transcribeAudio = async (audioFile: File | Blob): Promise<string> => {
     }
 };
 
+// 🔧 FUNÇÃO WRAPPER: Renomeia transcribeAudio para getTextFromAudio (compatibilidade)
+const getTextFromAudio = async (audioFile: File | Blob): Promise<string> => {
+    return await transcribeAudio(audioFile);
+};
+
 
 export const geminiService = {
+  generateProjectContent, // ✅ AGORA EXISTE!
   generateProjectBriefing,
   optimizeContent,
   getTextFromImage,
-  transcribeAudio,
+  getTextFromAudio, // ✅ CORRIGIDO: Era transcribeAudio
 };
