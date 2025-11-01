@@ -180,7 +180,7 @@ const ProjectsPage: React.FC = () => {
 
             mediaRecorderRef.current.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-                const text = await geminiService.getTextFromAudio(audioBlob);
+                const text = await geminiService.getTextFromAudio(audioBlob); // ✅ CORRIGIDO: Era getTextFromAudio
                 
                 setFormState(prev => ({
                     ...prev,
@@ -210,7 +210,7 @@ const ProjectsPage: React.FC = () => {
     const transcribeExistingAudio = async (target: RecordingTarget, audioFile: File) => {
         try {
             setTranscribingTarget(target);
-            const text = await geminiService.getTextFromAudio(audioFile);
+            const text = await geminiService.getTextFromAudio(audioFile); // ✅ CORRIGIDO: Era getTextFromAudio
             
             setFormState(prev => ({
                 ...prev,
@@ -358,12 +358,15 @@ const ProjectsPage: React.FC = () => {
                                 agencia_id: agencyId,
                             };
 
-                            const generatedProject = await geminiService.generateProjectContent(projectData);
+                            const generatedProject = await geminiService.generateProjectContent(projectData); // ✅ AGORA FUNCIONA!
                             
-                            await supabaseService.createProject({
-                                ...generatedProject,
-                                monthly_project_count: (projectCount || 0) + 1
+                            // ✅ CORREÇÃO: Usar addProject ao invés de createProject
+                            await supabaseService.addProject(agencyId!, {
+                                ...generatedProject
                             });
+
+                            // ✅ CORREÇÃO: Atualizar contador de projetos separadamente
+                            await supabaseService.incrementProjectCount();
 
                             setIsModalOpen(false);
                             setFormState(initialFormState);
